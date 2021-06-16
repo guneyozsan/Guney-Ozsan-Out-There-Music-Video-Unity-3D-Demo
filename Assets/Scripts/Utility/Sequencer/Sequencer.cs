@@ -27,34 +27,39 @@ namespace PostIllusions.Audio.Sequencer
     using PostIllusions.Audio.Music;
     using UnityEngine;
 
+    [RequireComponent(typeof(PlaybackController))]
     public class Sequencer : MonoBehaviour
     {
         [SerializeField]
         private MusicRegion[] regions;
 
+        private PlaybackController playbackController;
         private Measure measure;
         private MusicalAudioTime musicTime;
         private bool isPlaying;
 
         private void Awake()
         {
-            Playback.PlaybackStateSet += HandlePlaybackStateSet;
+            playbackController = GetComponent<PlaybackController>();
+            playbackController.PlaybackStateSet += PlaybackController_PlaybackStateSet;
         }
 
         private void OnDestroy()
         {
-            Playback.PlaybackStateSet -= HandlePlaybackStateSet;
+            playbackController.PlaybackStateSet -= PlaybackController_PlaybackStateSet;
         }
 
         public static event Action<MusicalAudioTime> UpdateBeat;
 
         private void Update()
         {
-            if (isPlaying)
+            if (!isPlaying)
             {
-                musicTime.AddTime(Time.deltaTime);
-                SetCurrentRegion();
+                return;
             }
+
+            musicTime.AddTime(Time.deltaTime);
+            SetCurrentRegion();
         }
 
         private void SetCurrentRegion()
@@ -62,9 +67,9 @@ namespace PostIllusions.Audio.Sequencer
             throw new NotImplementedException();
         }
 
-        private void HandlePlaybackStateSet(PlaybackState playbackEvent)
+        private void PlaybackController_PlaybackStateSet(PlaybackState playbackState)
         {
-            switch (playbackEvent)
+            switch (playbackState)
             {
                 case PlaybackState.Play:
                     Play();
@@ -76,7 +81,7 @@ namespace PostIllusions.Audio.Sequencer
                     Stop();
                     break;
                 default:
-                    throw new NotSupportedException("Undefined playback state: " + playbackEvent);
+                    throw new NotSupportedException(playbackState.ToString());
             }
         }
 
@@ -105,30 +110,32 @@ namespace PostIllusions.Audio.Sequencer
             currentBeatTime -= musicTime.BeatDuration * (1f - 1f / Time.timeScale);
 #endif // UNITY_EDITOR
 
-            if (musicTime.Time > currentBeatTime)
+            if (musicTime.Time <= currentBeatTime)
             {
-                if (musicTime.Beat < musicTime.Measure.BeatCount)
-                {
-                    musicTime.IncrementBeat();
-                }
-                else
-                {
-                    musicTime.SetBeat(1);
-                    musicTime.AddBar(1);
-                }
+                return;
+            }
+
+            if (musicTime.Beat < musicTime.Measure.BeatCount)
+            {
+                musicTime.IncrementBeat();
+            }
+            else
+            {
+                musicTime.SetBeat(1);
+                musicTime.AddBar(1);
+            }
 
 #if UNITY_EDITOR
-                if (Time.timeScale != 1)
-                {
-                    // Adjust music time to playback speed.
-                    musicTime.SetTime((currentBeatTime + musicTime.BeatDuration * (1f - 1f / Time.timeScale)));
-                }
+            if (Time.timeScale != 1)
+            {
+                // Adjust music time to playback speed.
+                musicTime.SetTime((currentBeatTime + musicTime.BeatDuration * (1f - 1f / Time.timeScale)));
+            }
 #endif // UNITY_EDITOR
 
-                if (UpdateBeat != null)
-                {
-                    UpdateBeat(musicTime);
-                }
+            if (UpdateBeat != null)
+            {
+                UpdateBeat(musicTime);
             }
         }
     }
